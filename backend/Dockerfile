@@ -15,6 +15,10 @@ WORKDIR /app
 # Copy only backend code
 COPY backend/ .
 
+# <<< ADD THE PYTHONPATH HERE so /app/src is on sys.path and `import utils` works
+# point PYTHONPATH to the folder that contains utils.py
+ENV PYTHONPATH="/app/src:${PYTHONPATH}"
+
 # Install Python dependencies
 RUN uv sync --no-dev
 
@@ -25,5 +29,5 @@ ENV PYTHONUNBUFFERED=1 \
 # Expose 8000 port
 EXPOSE 8000
 
-# Run uvicorn server for fastapi application 
-CMD ["uv", "run", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Recommended: use python -m uvicorn to avoid PATH/script issues. Remove --reload in prod.
+CMD ["uv", "run", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

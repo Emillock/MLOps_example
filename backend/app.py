@@ -46,7 +46,7 @@ async def predict(file: UploadFile = File(...)) -> Dict[str, Any]:
     try:
         # Validate file type
         suffix = Path(file.filename).suffix.lower()
-        if suffix not in {".csv", ".xlsx", ".xls"}:
+        if suffix not in {".csv", ".xlsx", ".xls", ".parquet"}:
             raise HTTPException(
                 status_code=400,
                 detail="Invalid file format. Please upload CSV or Excel files only.",
