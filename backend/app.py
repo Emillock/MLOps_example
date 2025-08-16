@@ -6,6 +6,7 @@ from typing import Any, Dict
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+
 from src.models.predict_model import main as predict_main
 
 # Configure logging

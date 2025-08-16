@@ -1,27 +1,21 @@
-from functools import partial
+import gzip
+import os
+import pickle
+import pickletools
 import warnings
+from functools import partial
 
+import pandas as pd
 from category_encoders import CatBoostEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from sklearn.metrics import classification_report, accuracy_score
+from sklearn.metrics import accuracy_score, classification_report
+from sklearn.model_selection import train_test_split
 from sklearn.pipeline import FunctionTransformer, Pipeline
+from utils import str_to_int_func, to_df_func, winsorize_array
+from xgboost import XGBClassifier
 
 warnings.filterwarnings("ignore")
-
-import re
-import gzip
-import pickle
-import pickletools
-import json
-import os
-
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from xgboost import XGBClassifier 
-from sklearn.base import BaseEstimator, TransformerMixin
-
-from utils import to_df_func, str_to_int_func, winsorize_array
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 
@@ -47,6 +41,7 @@ def val_pattern():
             arr.append(s)
     return arr
 
+
 def main():
     file_path = os.path.join(ROOT_DIR, "data", "processed", "multisim_dataset.parquet")
     df = pd.read_parquet(file_path)
@@ -54,18 +49,27 @@ def main():
     target = "target"
     numeric_cols = ["age", "tenure", "age_dev", "dev_num"]
     binary_cols = ["is_dualsim", "is_featurephone", "is_smartphone"]
-    categorical_cols = ["trf", "gndr", "dev_man", "device_os_name", "simcard_type", "region"]
+    categorical_cols = [
+        "trf",
+        "gndr",
+        "dev_man",
+        "device_os_name",
+        "simcard_type",
+        "region",
+    ]
     monthly_cols = val_pattern()
 
-    features= numeric_cols + categorical_cols + binary_cols + monthly_cols
+    features = numeric_cols + categorical_cols + binary_cols + monthly_cols
 
     df = df[features + [target]].copy()
 
     X = df[features]
     y = df[target]
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+
     str_to_int = FunctionTransformer(func=str_to_int_func, validate=False)
 
     winsor_transformer = FunctionTransformer(func=winsorize_array)
@@ -89,7 +93,10 @@ def main():
                 "cat",
                 Pipeline(
                     [
-                        ("impute", SimpleImputer(strategy="constant", fill_value="Missing")),
+                        (
+                            "impute",
+                            SimpleImputer(strategy="constant", fill_value="Missing"),
+                        ),
                         ("encode", CatBoostEncoder()),
                     ]
                 ),
@@ -108,7 +115,6 @@ def main():
             ("monthly", "passthrough", monthly_cols),
         ]
     )
-    
 
     params = {
         "n_estimators": 186,
@@ -120,11 +126,7 @@ def main():
     }
 
     model_pipeline = Pipeline(
-        [
-            ("preproc", preprocessor),
-            ("to_df", to_df),
-            ("xgb", XGBClassifier(**params))
-        ]
+        [("preproc", preprocessor), ("to_df", to_df), ("xgb", XGBClassifier(**params))]
     )
 
     # X_train_transformed = preproc_pipeline.fit_transform(X_train, y_train)

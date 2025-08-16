@@ -22,6 +22,8 @@ def detect_mime(filename: str) -> str:
         return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     if name.endswith(".xls"):
         return "application/vnd.ms-excel"
+    if name.endswith(".parquet"):
+        return "application/vnd.apache.parquet"
     return "application/octet-stream"
 
 
@@ -33,6 +35,8 @@ def load_df_from_bytes(file_bytes: bytes, filename: str) -> pd.DataFrame | None:
             return pd.read_csv(bio)
         elif filename.lower().endswith((".xlsx", ".xls")):
             return pd.read_excel(bio)
+        elif filename.lower().endswith(".parquet"):
+            return pd.read_parquet(bio)
         else:
             st.error("Unsupported file format. Please upload a CSV or Excel file.")
             return None
@@ -92,13 +96,13 @@ def main():
         )
         st.markdown("---")
 
-        api_url = "http://backend:8000/predict"
+        api_url = "http://127.0.0.1:8000/predict"
 
         st.markdown("### 📁 Upload Your Data")
         uploaded = st.file_uploader(
             "Choose a CSV or Excel file",
-            type=["csv", "xlsx", "xls"],
-            help="Supported: .csv, .xlsx, .xls",
+            type=["csv", "xlsx", "xls", "parquet"],
+            help="Supported: .csv, .xlsx, .xls, .parquet",
         )
 
         # Handle new/removed file

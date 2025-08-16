@@ -1,12 +1,11 @@
-from xgboost import XGBClassifier
-import pandas as pd
-from typing import Iterable, Optional
-import pickle
-import os
-import io
 import gzip
+import io
+import os
+import pickle
 import warnings
+from typing import Iterable, Optional
 
+import pandas as pd
 from sklearn.model_selection import train_test_split
 
 warnings.filterwarnings("ignore")
@@ -55,15 +54,17 @@ def main(
         X_test = _load_dataframe_from_bytes(file_content, filename)
     else:
         # Fallback path for local testing
-        df_path = os.path.join(ROOT_DIR, "data", "processed",
-                              "multisim_dataset.parquet")
+        df_path = os.path.join(
+            ROOT_DIR, "data", "processed", "multisim_dataset.parquet"
+        )
         df = pd.read_parquet(df_path)
         target = "target"
 
         X = df.drop(columns=[target])
         y = df[target]
         X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42)
+            X, y, test_size=0.2, random_state=42
+        )
 
     model_path = os.path.join(ROOT_DIR, "models", "xgb_trainmodel.pkl.gz")
 

@@ -1,32 +1,14 @@
 [project]
-name = "my_ml_proj"
+name = "backend"
 version = "0.1.0"
-description = "Reproducible ML project scaffold powered by uv"
+description = "Add your description here"
 readme = "README.md"
-requires-python = ">= 3.12"
-authors = [{ name = "Emillock", email = "mirzazadeemil2005@gmail.com" }]
+requires-python = ">=3.12"
 dependencies = [
     "category-encoders>=2.8.1",
-    # runtime deps go here, e.g. "pandas>=2.2"
-    "joblib>=1.5.1",
     "numpy>=2.3.2",
     "pandas>=2.3.1",
-    "pyarrow>=21.0.0",
     "scikit-learn>=1.7.1",
     "scipy>=1.16.1",
-    "sentence-transformers>=5.1.0",
     "xgboost>=3.0.4",
 ]
-
-# [tool.ruff]
-# lint.extend-select = ["ALL"]
-
-[tool.black]
-line-length = 100
-extend-exclude = '^(data|reports|models|notebooks)/'
-
-[tool.isort]
-profile = "black" # keeps isort compatible with Black
-line_length = 100
-src_paths = ["src"]
-extend_skip = ["data", "reports", "models", "notebooks"]

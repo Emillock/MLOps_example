@@ -1,6 +1,7 @@
+import numpy as np
 import pandas as pd
 from scipy.stats.mstats import winsorize
-import numpy as np
+
 
 def to_df_func(X, cols):
     return pd.DataFrame(X, columns=cols)
