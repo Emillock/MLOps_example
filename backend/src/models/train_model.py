@@ -1,20 +1,27 @@
+from functools import partial
 import warnings
+
+from category_encoders import CatBoostEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import classification_report, accuracy_score
+from sklearn.pipeline import FunctionTransformer, Pipeline
 
 warnings.filterwarnings("ignore")
 
+import re
 import gzip
-import os
 import pickle
 import pickletools
+import json
+import os
 
 import pandas as pd
-from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.impute import SimpleImputer
-from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder
+from xgboost import XGBClassifier 
+from sklearn.base import BaseEstimator, TransformerMixin
+
+from utils import to_df_func, str_to_int_func, winsorize_array
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 
@@ -30,63 +37,112 @@ def save_model(filename: str, model: object):
         f.write(optimized_pickle)
 
 
+def val_pattern():
+    arr = []
+    for second in range(1, 7):
+        for first in range(2, 22):
+            s = f"val{first}_{second}"
+            if s in ("val3_6", "val3_5", "val3_4"):
+                continue
+            arr.append(s)
+    return arr
+
 def main():
-    file_path = os.path.join(ROOT_DIR, "data", "processed", "Titanic-Dataset.csv")
-    df = pd.read_csv(file_path)
-    features = ["Pclass", "Sex", "Age", "SibSp", "Parch", "Fare", "Embarked"]
-    target = "Survived"
+    file_path = os.path.join(ROOT_DIR, "data", "processed", "multisim_dataset.parquet")
+    df = pd.read_parquet(file_path)
+
+    target = "target"
+    numeric_cols = ["age", "tenure", "age_dev", "dev_num"]
+    binary_cols = ["is_dualsim", "is_featurephone", "is_smartphone"]
+    categorical_cols = ["trf", "gndr", "dev_man", "device_os_name", "simcard_type", "region"]
+    monthly_cols = val_pattern()
+
+    features= numeric_cols + categorical_cols + binary_cols + monthly_cols
 
     df = df[features + [target]].copy()
+
     X = df[features]
+    y = df[target]
 
-    y = df[target].astype(int)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    str_to_int = FunctionTransformer(func=str_to_int_func, validate=False)
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.25, random_state=42, stratify=y
+    winsor_transformer = FunctionTransformer(func=winsorize_array)
+
+    to_df = FunctionTransformer(func=partial(to_df_func, cols=features), validate=False)
+
+    preprocessor = ColumnTransformer(
+        [
+            (
+                "num",
+                Pipeline(
+                    [
+                        ("str_to_int", str_to_int),
+                        ("impute", SimpleImputer(strategy="median")),
+                        ("winsorize", winsor_transformer),
+                    ]
+                ),
+                numeric_cols,
+            ),
+            (
+                "cat",
+                Pipeline(
+                    [
+                        ("impute", SimpleImputer(strategy="constant", fill_value="Missing")),
+                        ("encode", CatBoostEncoder()),
+                    ]
+                ),
+                categorical_cols,
+            ),
+            (
+                "bin",
+                Pipeline(
+                    [
+                        ("str_to_int", str_to_int),
+                        ("impute", SimpleImputer(strategy="constant", fill_value=0)),
+                    ]
+                ),
+                binary_cols,
+            ),
+            ("monthly", "passthrough", monthly_cols),
+        ]
     )
+    
 
-    numeric_features = ["Age", "SibSp", "Parch", "Fare"]
-    categorical_features = ["Pclass", "Sex", "Embarked"]
+    params = {
+        "n_estimators": 186,
+        "max_depth": 10,
+        "learning_rate": 0.01155364929483116,
+        "subsample": 0.5596769098694525,
+        "colsample_bytree": 0.9364342412798315,
+        "min_child_weight": 7,
+    }
 
-    numeric_transformer = Pipeline(
-        steps=[
-            ("imputer", SimpleImputer(strategy="median")),
+    model_pipeline = Pipeline(
+        [
+            ("preproc", preprocessor),
+            ("to_df", to_df),
+            ("xgb", XGBClassifier(**params))
         ]
     )
 
-    categorical_transformer = Pipeline(
-        steps=[
-            ("imputer", SimpleImputer(strategy="most_frequent")),
-            ("onehot", OneHotEncoder(handle_unknown="ignore")),
-        ]
-    )
+    # X_train_transformed = preproc_pipeline.fit_transform(X_train, y_train)
 
-    preprocess = ColumnTransformer(
-        transformers=[
-            ("num", numeric_transformer, numeric_features),
-            ("cat", categorical_transformer, categorical_features),
-        ]
-    )
+    # weights = preproc_pipeline.named_steps[weights_step_name].feature_weights_.tolist()
 
-    rf = RandomForestClassifier(
-        n_estimators=200, max_depth=None, random_state=42, n_jobs=-1
-    )
+    model_pipeline.fit(X_train, y_train)
 
-    model = Pipeline(steps=[("preprocess", preprocess), ("rf", rf)])
+    # X_test_transformed = preproc_pipeline.transform(X_test)
 
-    # Train model
-    model.fit(X_train, y_train)
-
-    # Evaluate before saving
-    y_pred = model.predict(X_test)
+    y_pred = model_pipeline.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
     print(f"Test accuracy (before save): {acc:.3f}")
     print(classification_report(y_test, y_pred))
 
-    # Serialize (save) the trained pipeline
-    model_path = "titanic_rf.pkl.gz"
-    save_model(model_path, model)
-    print(f"Model saved to: {model_path}")
+    filename = "xgb_trainmodel.pkl.gz"
+
+    save_model(filename, model_pipeline)
 
 
 if __name__ == "__main__":

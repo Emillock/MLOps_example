@@ -1,16 +1,17 @@
+from xgboost import XGBClassifier
+import pandas as pd
+from typing import Iterable, Optional
+import pickle
+import os
+import io
+import gzip
 import warnings
+
+from sklearn.model_selection import train_test_split
 
 warnings.filterwarnings("ignore")
 
-import gzip
-import io
-import os
-import pickle
-from typing import Iterable, Optional
 
-import pandas as pd
-
-# Root of the repo (two levels up from this file)
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 
 
@@ -38,6 +39,8 @@ def _load_dataframe_from_bytes(
         df = pd.read_csv(buffer)
     elif name.endswith(".xlsx") or name.endswith(".xls"):
         df = pd.read_excel(buffer)
+    elif name.endswith(".parquet"):
+        df = pd.read_parquet(buffer)
     else:
         # Fall back to Excel; FastAPI already validated extensions, this is just a guard.
         df = pd.read_excel(buffer)
@@ -47,22 +50,26 @@ def _load_dataframe_from_bytes(
 def main(
     file_content: Optional[bytes] = None, filename: Optional[str] = None
 ) -> Iterable:
-    """
-    Accepts raw file bytes and an optional filename to parse CSV/Excel,
-    loads the trained model, and returns predictions.
-    """
-    # Load input features
+
     if file_content:
         X_test = _load_dataframe_from_bytes(file_content, filename)
     else:
         # Fallback path for local testing
-        X_test_path = os.path.join(ROOT_DIR, "data", "external", "X_test.xlsx")
-        X_test = pd.read_excel(X_test_path)
+        df_path = os.path.join(ROOT_DIR, "data", "processed",
+                              "multisim_dataset.parquet")
+        df = pd.read_parquet(df_path)
+        target = "target"
 
-    # Load model and predict
-    model_path = os.path.join(ROOT_DIR, "models", "titanic_rf.pkl.gz")
-    loaded_model = load_model(model_path)
-    y_pred = loaded_model.predict(X_test)
+        X = df.drop(columns=[target])
+        y = df[target]
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42)
+
+    model_path = os.path.join(ROOT_DIR, "models", "xgb_trainmodel.pkl.gz")
+
+    xgb = load_model(model_path)
+
+    y_pred = xgb.predict(X_test)
 
     try:
         return y_pred.tolist()
@@ -71,6 +78,5 @@ def main(
 
 
 if __name__ == "__main__":
-    # Quick manual test (reads default X_test.xlsx)
     preds = main()
     print(f"Generated {len(preds)} predictions")

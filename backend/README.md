@@ -1,33 +1,15 @@
-# DataMinds'25 ML Predictor - Backend API
+# My ML Project
 
-🚀 A high-performance FastAPI backend service for machine learning predictions with async file processing and comprehensive error handling.
+![Build Status](https://github.com/Emillock/my-ml-proj/actions/workflows/ci-build.yaml/badge.svg)
 
-## 🌟 Features
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![3.12](https://img.shields.io/badge/Python-3.12-green.svg)](https://shields.io/)
 
-- **🔥 FastAPI Framework**: Modern, fast web framework with automatic API documentation
-- **📁 Multi-format Support**: CSV, Excel (.xlsx, .xls) file processing
-- **⚡ Async Processing**: Non-blocking file uploads and processing
-- **🌐 CORS Enabled**: Cross-origin resource sharing for frontend integration
-- **📊 Health Monitoring**: Built-in health check endpoint
-- **🕒 Timezone Support**: UTC and Baku timezone tracking
-- **🛡️ Error Handling**: Comprehensive exception handling and logging
-- **📝 Auto Documentation**: Interactive API docs via Swagger UI
-- **🐳 Container Ready**: Fully dockerized with UV dependency management
+---
 
-## 🛠️ Technology Stack
+Reproducible ML project scaffold powered by uv
 
-- **Web Framework**: FastAPI 0.100+
-- **Async Runtime**: Uvicorn ASGI server
-- **Data Processing**: Custom ML prediction pipeline
-- **File Handling**: Async file upload processing
-- **Logging**: Python logging with structured output
-- **Dependency Management**: UV (ultra-fast Python package installer)
-- **Containerization**: Docker build
-
-
-## 🏗️ Architecture
-
-### Project Structure
+## Structure
 ------------
 
     ├── LICENSE
@@ -66,176 +48,44 @@
     │   │
     │   └── visualization  <- Scripts to create exploratory and results oriented visualizations
     │       └── visualize.py
-    ├── app.py                    # FastAPI application entry point
-    ├── Dockerfile                # Container build instructions
-    ├── pyproject.toml            # UV project configuration & dependencies
-    ├── uv.lock                   # Locked dependency versions
-    └── README.md                 # This file
+
 
 --------
 
 
-### Key Components
-
-1. **FastAPI Application**: Main web server with CORS middleware
-2. **Prediction Pipeline**: ML model inference via `src.models.predict_model`
-3. **File Processor**: Async file upload and validation
-4. **Health Monitor**: System status and timezone tracking
-5. **Error Handler**: Comprehensive exception management
-6. **Logger**: Structured logging for debugging and monitoring
-
-## 🐳 Docker Setup
-
-This backend API is fully containerized and designed to work as part of a Docker Compose stack.
-
-## 🚀 Quick Start
-
-### Option 1: Docker Compose (Recommended)
-
-The backend is part of a larger Docker Compose application:
-
+## Getting started (uv)
 ```bash
-# Run the entire stack
-docker-compose up -d
-
-# View logs
-docker-compose logs backend
-
-# Stop the stack
-docker-compose down
-```
-
-The API will be available at `http://localhost:8000`
-
-### Option 2: Standalone Docker
-
-```bash
-# Build the backend image
-docker build -t dataminds-backend .
-
-# Run the container
-docker run -p 8000:8000 \
-  -e HOST=0.0.0.0 \
-  -e PORT=8000 \
-  dataminds-backend
-```
-
-### Option 3: Local Development
-
-For local development without Docker:
-
-```bash
-# Install UV (if not already installed)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install dependencies
+# create venv and sync (will create uv.lock)
 uv sync
 
-# Run the application
-uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+# add a runtime dependency
+uv add numpy
+
+# run code
+uv run python -m src.models.train_model
 ```
 
-## 📡 API Endpoints
+## Code quality (ruff, isort, black via uvx)
+### Run tools in ephemeral envs — no dev dependencies added to your project.
 
-### Health Check
-
-**GET** `/health`
-
-Returns system status and timezone information.
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "utc_time": "2024-08-14T10:30:00.000000+00:00",
-  "baku_time": "2024-08-14T14:30:00.000000+04:00"
-}
-```
-
-### Make Predictions
-
-**POST** `/predict`
-
-Upload a file and receive ML predictions.
-
-**Request:**
-- **Content-Type**: `multipart/form-data`
-- **Body**: Form data with file upload
-  - `file`: CSV or Excel file (.csv, .xlsx, .xls)
-
-**Response:**
-```json
-{
-  "status": "success",
-  "message": "Predictions generated successfully",
-  "data": {
-    "predictions": [0.85, 0.92, 0.78, 0.91],
-    "num_predictions": 4,
-    "processing_time_seconds": 0.234
-  }
-}
-```
-
-**Error Response:**
-```json
-{
-  "detail": "Invalid file format. Please upload CSV or Excel files only."
-}
-```
-
-### Interactive API Documentation
-
-- **Swagger UI**: `http://localhost:8000/docs`
-
-## 🔧 Configuration
-
-### Environment Variables
-
+#### Lint (no changes)
 ```bash
-# Server configuration
-HOST=0.0.0.0
-PORT=8000
-WORKERS=1
-
-# Logging
-LOG_LEVEL=INFO
-
-# Application settings
-APP_NAME="FastAPI Backend server for ML project"
-APP_VERSION="1.0.0"
+# Lint entire repo
+uvx ruff check .
 ```
 
-### Docker Compose Integration
+#### Auto-fix
+```bash
+# 1) Sort imports
+uvx isort .
 
-```yaml
-# Example docker-compose.yml snippet
-services:
-  backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    networks:
-      - safe_networks
-    restart: always
-    image: backend
-    container_name: backend
-    volumes:
-      - ./backend:/app
-      - backend_venv:/app/.venv
-    ports:
-      - "8000:8000"
+# 2) Format code
+uvx black .
+
+# 3) Apply Ruff’s safe fixes (entire repo)
+uvx ruff check --fix .
 ```
-
-### CORS Configuration
-
-The API is configured to accept requests from any origin:
-
-```python
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Configure for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-```
+> Also remove unused imports/variables:
+> ```bash
+> uvx ruff check --fix --unsafe-fixes .
+> ```

@@ -1,25 +1,25 @@
 [project]
-name = "MLOps_backend_service"
+name = "my_ml_proj"
 version = "0.1.0"
-description = "Example of FastAPI backend for DataMinds bootcamp"
+description = "Reproducible ML project scaffold powered by uv"
 readme = "README.md"
 requires-python = ">= 3.12"
-authors = [{ name = "Elkhn", email = "elxana@azercell.com" }]
+authors = [{ name = "Emillock", email = "mirzazadeemil2005@gmail.com" }]
 dependencies = [
-    "fastapi>=0.116.1",
-    "openpyxl>=3.1.5",
+    "category-encoders>=2.8.1",
     # runtime deps go here, e.g. "pandas>=2.2"
+    "joblib>=1.5.1",
+    "numpy>=2.3.2",
     "pandas>=2.3.1",
-    "python-multipart>=0.0.20",
+    "pyarrow>=21.0.0",
     "scikit-learn>=1.7.1",
-    "uvicorn>=0.35.0",
+    "scipy>=1.16.1",
+    "sentence-transformers>=5.1.0",
+    "xgboost>=3.0.4",
 ]
 
 # [tool.ruff]
 # lint.extend-select = ["ALL"]
-
-[tool.ruff.lint]
-ignore = ["E402"]
 
 [tool.black]
 line-length = 100
@@ -28,4 +28,5 @@ extend-exclude = '^(data|reports|models|notebooks)/'
 [tool.isort]
 profile = "black" # keeps isort compatible with Black
 line_length = 100
-skip_glob = ["data/**", "reports/**", "models/**", "notebooks/**"]
+src_paths = ["src"]
+extend_skip = ["data", "reports", "models", "notebooks"]
