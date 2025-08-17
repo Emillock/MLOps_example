@@ -12,8 +12,9 @@ from sklearn.impute import SimpleImputer
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import FunctionTransformer, Pipeline
-from utils import str_to_int_func, to_df_func, winsorize_array
 from xgboost import XGBClassifier
+
+from utils import str_to_int_func, to_df_func, winsorize_array
 
 warnings.filterwarnings("ignore")
 
