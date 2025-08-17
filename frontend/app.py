@@ -91,52 +91,35 @@ def main():
     if "pred_ts" not in st.session_state:
         st.session_state.pred_ts = None
 
-    # Sidebar
-    with st.sidebar:
-        st.markdown(
-            """
-        <h2>ML Predictor</h2>
-        <p>Upload your data and get predictions from the backend model.</p>
-        """,
-            unsafe_allow_html=True,
-        )
-        st.markdown("---")
+    def _process_upload():
+        uploaded = st.session_state.get("uploaded_file")  # comes from the uploader key
+        if uploaded is None:
+            # user cleared file
+            st.session_state.uploaded_name = None
+            st.session_state.file_bytes = None
+            st.session_state.df = None
+            st.session_state.results = None
+            st.session_state.pred_ts = None
+            return
 
-        api_url = "http://backend:8000/predict"
-
-        st.markdown("### 📁 Upload Your Data")
-        uploaded = st.file_uploader(
-            "Choose a CSV, Excel, or Parquet file",
-            type=["csv", "xlsx", "xls", "parquet"],
-            help="Supported: .csv, .xlsx, .xls, .parquet",
-        )
-
-        # --- Robust upload handling: compare bytes rather than object identity ---
-        if uploaded is not None:
+        try:
             file_bytes = uploaded.getvalue()
-            # if there are no bytes stored yet or the bytes differ, treat as a new file
-            if (
-                st.session_state.file_bytes is None
-                or st.session_state.file_bytes != file_bytes
-            ):
-                st.session_state.uploaded_name = uploaded.name
-                st.session_state.file_bytes = file_bytes
-                st.session_state.df = load_df_from_bytes(file_bytes, uploaded.name)
-                # new upload -> clear previous results (user changed input)
-                st.session_state.results = None
-                # reset pred timestamp so filename will be fresh when new predictions are made
-                st.session_state.pred_ts = None
-        else:
-            # user removed file; clear stored state
-            if (
-                st.session_state.file_bytes is not None
-                or st.session_state.uploaded_name is not None
-            ):
-                st.session_state.uploaded_name = None
-                st.session_state.file_bytes = None
-                st.session_state.df = None
-                st.session_state.results = None
-                st.session_state.pred_ts = None
+        except Exception as e:
+            st.error(f"Failed to read uploaded file: {e}")
+            return
+
+        # only update if contents actually changed
+        if st.session_state.get("file_bytes") != file_bytes:
+            st.session_state.uploaded_name = uploaded.name
+            st.session_state.file_bytes = file_bytes
+            st.session_state.df = load_df_from_bytes(file_bytes, uploaded.name)
+            st.session_state.results = None
+            st.session_state.pred_ts = None
+            # usually not necessary: Streamlit will rerun automatically after widget change
+            # if you really need to force an immediate rebuild, uncomment:
+            # st.experimental_rerun()
+
+    api_url = "http://backend:8000/predict"
 
     # Main header
     st.markdown(
@@ -148,10 +131,55 @@ def main():
         unsafe_allow_html=True,
     )
 
+    st.markdown(
+        """
+    <div class="file-upload-container">
+        <h2>📁 Get Started</h2>
+        <p>Upload your CSV or Excel file to begin making predictions!</p>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    uploaded = st.file_uploader(
+        "",
+        type=["csv", "xlsx", "xls", "parquet"],
+        help="Supported: .csv, .xlsx, .xls, .parquet",
+        key="uploaded_file",
+        on_change=_process_upload,
+    )
+
+    # --- Robust upload handling: compare bytes rather than object identity ---
+    if uploaded is not None:
+        file_bytes = uploaded.getvalue()
+        # if there are no bytes stored yet or the bytes differ, treat as a new file
+        if (
+            st.session_state.file_bytes is None
+            or st.session_state.file_bytes != file_bytes
+        ):
+            st.session_state.uploaded_name = uploaded.name
+            st.session_state.file_bytes = file_bytes
+            st.session_state.df = load_df_from_bytes(file_bytes, uploaded.name)
+            # new upload -> clear previous results (user changed input)
+            st.session_state.results = None
+            # reset pred timestamp so filename will be fresh when new predictions are made
+            st.session_state.pred_ts = None
+    else:
+        # user removed file; clear stored state
+        if (
+            st.session_state.file_bytes is not None
+            or st.session_state.uploaded_name is not None
+        ):
+            st.session_state.uploaded_name = None
+            st.session_state.file_bytes = None
+            st.session_state.df = None
+            st.session_state.results = None
+            st.session_state.pred_ts = None
+
     # Main content
     if st.session_state.df is not None:
         # Success banner
-        _, c, _ = st.columns([1, 2, 1])
+        c, _, _ = st.columns([1, 2, 1])
         with c:
             st.markdown(
                 """
@@ -160,6 +188,14 @@ def main():
                 Ready for prediction analysis.
             </div>
             """,
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                """
+                <div style="width:90vw;">
+                <hr style="border:none; height:1px; background:#e6e6e6;" />
+                </div>
+                """,
                 unsafe_allow_html=True,
             )
 
@@ -316,19 +352,7 @@ def main():
                     f"<script>console.log({json.dumps({'event':'download_section_rendered','format':fmt,'error':bool(error_msg)})})</script>",
                     height=0,
                 )
-
-    else:
         # Empty state
-        st.markdown(
-            """
-        <div class="file-upload-container">
-            <h2>📁 Get Started</h2>
-            <p>Upload your CSV or Excel file using the sidebar to begin making predictions!</p>
-            <p>👈 Look for the file uploader in the sidebar</p>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
 
 
 if __name__ == "__main__":
