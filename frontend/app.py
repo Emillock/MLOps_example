@@ -1,9 +1,11 @@
+import io
+import json
 import time
-from io import BytesIO
 
 import pandas as pd
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Page configuration
 st.set_page_config(
@@ -30,7 +32,7 @@ def detect_mime(filename: str) -> str:
 def load_df_from_bytes(file_bytes: bytes, filename: str) -> pd.DataFrame | None:
     """Load CSV or Excel bytes into DataFrame (for preview)."""
     try:
-        bio = BytesIO(file_bytes)
+        bio = io.BytesIO(file_bytes)
         if filename.lower().endswith(".csv"):
             return pd.read_csv(bio)
         elif filename.lower().endswith((".xlsx", ".xls")):
@@ -38,7 +40,9 @@ def load_df_from_bytes(file_bytes: bytes, filename: str) -> pd.DataFrame | None:
         elif filename.lower().endswith(".parquet"):
             return pd.read_parquet(bio)
         else:
-            st.error("Unsupported file format. Please upload a CSV or Excel file.")
+            st.error(
+                "Unsupported file format. Please upload a CSV, Excel, or Parquet file."
+            )
             return None
     except Exception as e:
         st.error(f"Error loading file: {e}")
@@ -76,20 +80,22 @@ def send_to_api(file_bytes: bytes, filename: str, api_url: str) -> dict | None:
 
 def main():
     # Session state
-    if "uploaded" not in st.session_state:
-        st.session_state.uploaded = None  # streamlit UploadedFile
+    if "uploaded_name" not in st.session_state:
+        st.session_state.uploaded_name = None  # store filename here
     if "file_bytes" not in st.session_state:
         st.session_state.file_bytes = None  # raw bytes (to send to API)
     if "df" not in st.session_state:
         st.session_state.df = None  # preview dataframe
     if "results" not in st.session_state:
         st.session_state.results = None  # API response (parsed)
+    if "pred_ts" not in st.session_state:
+        st.session_state.pred_ts = None
 
     # Sidebar
     with st.sidebar:
         st.markdown(
             """
-        <h2>🤖 DataMinds'25 ML Predictor</h2>
+        <h2>ML Predictor</h2>
         <p>Upload your data and get predictions from the backend model.</p>
         """,
             unsafe_allow_html=True,
@@ -100,35 +106,45 @@ def main():
 
         st.markdown("### 📁 Upload Your Data")
         uploaded = st.file_uploader(
-            "Choose a CSV or Excel file",
+            "Choose a CSV, Excel, or Parquet file",
             type=["csv", "xlsx", "xls", "parquet"],
             help="Supported: .csv, .xlsx, .xls, .parquet",
         )
 
-        # Handle new/removed file
+        # --- Robust upload handling: compare bytes rather than object identity ---
         if uploaded is not None:
-            if uploaded is not st.session_state.uploaded:
-                # Persist uploaded file + bytes
-                st.session_state.uploaded = uploaded
-                st.session_state.file_bytes = uploaded.getvalue()  # safe to reuse
-                st.session_state.df = load_df_from_bytes(
-                    st.session_state.file_bytes, uploaded.name
-                )
+            file_bytes = uploaded.getvalue()
+            # if there are no bytes stored yet or the bytes differ, treat as a new file
+            if (
+                st.session_state.file_bytes is None
+                or st.session_state.file_bytes != file_bytes
+            ):
+                st.session_state.uploaded_name = uploaded.name
+                st.session_state.file_bytes = file_bytes
+                st.session_state.df = load_df_from_bytes(file_bytes, uploaded.name)
+                # new upload -> clear previous results (user changed input)
                 st.session_state.results = None
+                # reset pred timestamp so filename will be fresh when new predictions are made
+                st.session_state.pred_ts = None
         else:
-            # removed
-            st.session_state.uploaded = None
-            st.session_state.file_bytes = None
-            st.session_state.df = None
-            st.session_state.results = None
+            # user removed file; clear stored state
+            if (
+                st.session_state.file_bytes is not None
+                or st.session_state.uploaded_name is not None
+            ):
+                st.session_state.uploaded_name = None
+                st.session_state.file_bytes = None
+                st.session_state.df = None
+                st.session_state.results = None
+                st.session_state.pred_ts = None
 
     # Main header
     st.markdown(
-        '<h1 class="main-header">🤖 DataMinds\'25 ML Predictor</h1>',
+        '<h1 class="main-header">🤖 ML Predictor</h1>',
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<p class="sub-header">Transform your data into intelligent predictions with cutting-edge machine learning</p>',
+        '<p class="sub-header">Transform your data into intelligent predictions with XGBoost Classifier</p>',
         unsafe_allow_html=True,
     )
 
@@ -151,7 +167,7 @@ def main():
         st.markdown("### 📊 Dataset Overview")
         c1, c2, c3, c4 = st.columns(4)
         with c1:
-            st.metric("📝 Filename", st.session_state.uploaded.name)
+            st.metric("📝 Filename", st.session_state.uploaded_name)
         with c2:
             st.metric("📏 Rows", f"{len(st.session_state.df):,}")
         with c3:
@@ -188,7 +204,7 @@ def main():
                         start = time.time()
                         data = send_to_api(
                             st.session_state.file_bytes,
-                            st.session_state.uploaded.name,
+                            st.session_state.uploaded_name,
                             api_url,
                         )
                         if (
@@ -216,6 +232,9 @@ def main():
                                 "num_predictions": d.get("num_predictions", n),
                                 "message": data.get("message", "Predictions generated"),
                             }
+                            # set the timestamp now that we have results (filename stable across reruns)
+                            if st.session_state.pred_ts is None:
+                                st.session_state.pred_ts = int(time.time())
                         else:
                             st.session_state.results = None
 
@@ -226,7 +245,6 @@ def main():
 
             c1, c2, c3 = st.columns(3)
             with c1:
-                # If your backend later returns accuracy, wire it here; for now show message
                 st.metric("✅ Status", "Success")
             with c2:
                 st.metric("⚡ Processing Time", f"{r.get('processing_time', 0):.3f}s")
@@ -244,15 +262,59 @@ def main():
             st.markdown("### 📋 Detailed Predictions")
             st.dataframe(out_df, use_container_width=True, height=400)
 
-            # Download
+            # Ensure pred_ts exists (should be set when predictions were generated)
+            if st.session_state.pred_ts is None:
+                st.session_state.pred_ts = int(time.time())
+
+            fmt = st.selectbox(
+                "Select download format", ("Parquet", "CSV"), key="download_format"
+            )
+
+            filename = f"predictions_{st.session_state['pred_ts']}.{ 'csv' if fmt == 'CSV' else 'parquet' }"
+
+            # prepare bytes but catch any errors so we don't crash the rerun
+            data_bytes = None
+            mime = "application/octet-stream"
+            error_msg = None
+
+            try:
+                if fmt == "CSV":
+                    data_bytes = out_df.to_csv(index=False).encode("utf-8")
+                    mime = "text/csv"
+                else:
+                    buf = io.BytesIO()
+                    out_df.to_parquet(
+                        buf, index=False
+                    )  # pyarrow / fastparquet required
+                    buf.seek(0)
+                    data_bytes = buf.getvalue()
+                    mime = "application/x-parquet"
+            except Exception as e:
+                error_msg = str(e)
+
+            # layout + consistent widget rendering (download_button always present)
             _, mid, _ = st.columns([1, 1, 1])
             with mid:
                 st.download_button(
-                    label="📥 Download Predictions (CSV)",
-                    data=out_df.to_csv(index=False),
-                    file_name=f"predictions_{int(time.time())}.csv",
-                    mime="text/csv",
+                    label="📥 Download Predictions",
+                    data=(
+                        data_bytes if data_bytes is not None else b""
+                    ),  # keep widget present
+                    file_name=filename,
+                    mime=mime,
+                    key=f"download_{fmt.lower()}",  # stable per-format key
+                    disabled=(data_bytes is None),
                     use_container_width=True,
+                )
+
+                # show helpful error if file creation failed
+                if error_msg:
+                    st.error(f"Could not create file: {error_msg}")
+
+                # lightweight console log (appears in the iframe console)
+                components.html(
+                    f"<script>console.log({json.dumps({'event':'download_section_rendered','format':fmt,'error':bool(error_msg)})})</script>",
+                    height=0,
                 )
 
     else:
@@ -267,33 +329,6 @@ def main():
         """,
             unsafe_allow_html=True,
         )
-
-        st.markdown("### ✨ What makes this special?")
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.markdown(
-                "**🚀 Lightning Fast**\n- Optimized ML algorithms\n- Real-time processing\n- Instant results"
-            )
-        with c2:
-            st.markdown(
-                "**🎯 High Accuracy**\n- State-of-the-art models\n- Validated predictions\n- Confidence scoring"
-            )
-        with c3:
-            st.markdown(
-                "**📊 Easy to Use**\n- Drag & drop interface\n- Automatic data validation\n- Export ready results"
-            )
-
-        st.markdown("### 📋 Expected Data Format")
-        sample_data = pd.DataFrame(
-            {
-                "Feature_1": [1.2, 2.1, 3.4, 4.2],
-                "Feature_2": [0.8, 1.5, 2.3, 1.7],
-                "Feature_3": [10, 15, 20, 12],
-                "Category": ["A", "B", "A", "C"],
-            }
-        )
-        st.dataframe(sample_data, use_container_width=True)
-        st.caption("💡 Your data should have features in columns and samples in rows")
 
 
 if __name__ == "__main__":
