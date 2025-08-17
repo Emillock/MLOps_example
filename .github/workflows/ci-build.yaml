@@ -40,7 +40,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Deploy: git pull & docker-compose
+      - name: Deploy git pull & docker-compose
         env:
           DOCKER_BUILDKIT: "0"
           COMPOSE_DOCKER_CLI_BUILD: "1"
